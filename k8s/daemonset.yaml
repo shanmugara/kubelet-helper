@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-config-reloader
+  namespace: kube-system
+  labels:
+    app: kubelet-config-reloader
+spec:
+  selector:
+    matchLabels:
+      app: kubelet-config-reloader
+  template:
+    metadata:
+      labels:
+        app: kubelet-config-reloader
+    spec:
+      hostPID: true
+      hostNetwork: true
+      serviceAccountName: kubelet-config-reloader
+      containers:
+      - name: reloader
+        image: your-registry/kubelet-helper:latest
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+        volumeMounts:
+        - name: kubelet-config
+          mountPath: /var/lib/kubelet/conf.d
+          readOnly: false
+        - name: systemd
+          mountPath: /run/systemd
+          readOnly: false
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+      - name: kubelet-config
+        hostPath:
+          path: /var/lib/kubelet/conf.d
+          type: DirectoryOrCreate
+      - name: systemd
+        hostPath:
+          path: /run/systemd
+          type: Directory
+      tolerations:
+      - operator: Exists
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubelet-config-reloader
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubelet-config-reloader
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubelet-config-reloader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubelet-config-reloader
+subjects:
+- kind: ServiceAccount
+  name: kubelet-config-reloader
+  namespace: kube-system
